@@ -1,10 +1,11 @@
 // src/components/DiaryDetailModal.js
 // ------------------------------------------------------------
-// Modal detail entri: hero image, judul, tanggal, isi, tombol Tutup.
-// Props:
-//   visible : boolean  -> modal tampil atau tidak
-//   onClose : function -> dipanggil saat modal ditutup
-//   entry   : object   -> { title, date, body, heroUri, moodUri }
+// Modal detail entri: gambar mood, judul, tanggal, isi, tombol Tutup.
+// Modal ini dikendalikan sepenuhnya oleh parent lewat props:
+//   visible : boolean  -> !!selected di DiaryListScreen
+//   entry   : object   -> entri yang sedang dipilih (state `selected`)
+//   onClose : function -> parent memanggil setSelected(null)
+//   liked   : boolean  -> status like entri ini (opsional)
 // ------------------------------------------------------------
 import React from 'react';
 import {
@@ -18,25 +19,29 @@ import {
 } from 'react-native';
 import { COLORS, SPACE, RADIUS, TYPO } from '../styles/tokens';
 
-export default function DiaryDetailModal({ visible, onClose, entry }) {
+export default function DiaryDetailModal({ visible, onClose, entry, liked = false }) {
   if (!entry) return null;
 
-  const { title, date, body, heroUri, moodUri } = entry;
+  const { title, date, body, moodImage } = entry;
 
   return (
     <Modal
       visible={visible}
       animationType="slide"
-      onRequestClose={onClose} // tombol Back di Android menutup modal
+      onRequestClose={onClose} // tombol Back Android menutup modal
     >
       <View style={styles.container}>
         <ScrollView>
-          {/* aspectRatio menjaga proporsi 16:9 di semua lebar layar */}
-          <Image source={{ uri: heroUri || moodUri }} style={styles.hero} />
+          <View style={styles.hero}>
+            <Image source={moodImage} style={styles.heroImage} />
+          </View>
 
           <View style={styles.content}>
             <Text style={styles.title}>{title}</Text>
-            <Text style={styles.date}>{date}</Text>
+            <Text style={styles.date}>
+              {date}
+              {liked ? '  ·  ❤️ Disukai' : ''}
+            </Text>
             <Text style={styles.body}>{body}</Text>
 
             <Pressable
@@ -59,10 +64,13 @@ const styles = StyleSheet.create({
   hero: {
     width: '100%',
     aspectRatio: 16 / 9,
-    backgroundColor: '#DDDDDD',
+    backgroundColor: '#EEF2FF',
     borderBottomLeftRadius: RADIUS.card,
     borderBottomRightRadius: RADIUS.card,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  heroImage: { width: 140, height: 140 },
   content: { padding: SPACE.l, gap: SPACE.s },
   title: { fontSize: 20, fontWeight: '700', color: COLORS.text },
   date: { fontSize: TYPO.caption, color: COLORS.muted, marginBottom: SPACE.s },
@@ -70,7 +78,7 @@ const styles = StyleSheet.create({
   button: {
     marginTop: SPACE.l,
     padding: SPACE.m,
-    minHeight: 48,             // target sentuh nyaman
+    minHeight: 48,
     justifyContent: 'center',
     borderRadius: RADIUS.card,
     backgroundColor: COLORS.accent,

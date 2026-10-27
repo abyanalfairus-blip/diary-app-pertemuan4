@@ -1,112 +1,156 @@
 // src/screens/DiaryListScreen.js
 // ------------------------------------------------------------
-// Layar daftar diary yang responsif:
-//   - lebar < 600 px  -> 1 kolom (ponsel)
-//   - lebar >= 600 px -> 2 kolom (tablet / layar lebar / landscape)
-// Menekan kartu membuka DiaryDetailModal.
+// CONTAINER COMPONENT — sumber kebenaran (single source of truth).
+//
+// STATE UTAMA
+//   entries  : seluruh data diary
+//   query    : kata kunci pencarian (dikirim SearchBar via onChange)
+//   likedIds : Set berisi id entri yang disukai
+//   selected : entri yang sedang dibuka di modal (null = tertutup)
+//
+// DERIVED STATE
+//   filtered   : hasil filter entries + query (useMemo, tidak disimpan)
+//   likedCount : jumlah entri yang disukai (dihitung dari likedIds)
+//
+// Layout responsif dari Pertemuan 3 tetap dipertahankan:
+//   lebar < 600 px -> 1 kolom, lebar >= 600 px -> 2 kolom.
 // ------------------------------------------------------------
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, useWindowDimensions } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  useWindowDimensions,
+} from 'react-native';
+
+import { COLORS, SPACE, TYPO, BREAKPOINTS } from '../styles/tokens';
 import DiaryCard from '../components/DiaryCard';
 import DiaryDetailModal from '../components/DiaryDetailModal';
-import { COLORS, SPACE, TYPO, BREAKPOINTS } from '../styles/tokens';
+import SearchBar from '../components/SearchBar';
+import EntryForm from '../components/EntryForm';
 
-// Data contoh (5 entri: 3 dari modul + 2 entri baru sesuai tugas)
-const DATA = [
+const INITIAL_ENTRIES = [
   {
     id: 1,
     title: 'Pagi yang Tenang',
-    date: '2025-10-06',
-    preview: 'Hari ini aku bangun lebih pagi dan berjalan kaki 20 menit. Udara terasa sejuk...',
-    body: 'Hari ini aku bangun lebih pagi dari biasanya dan berjalan kaki selama 20 menit di sekitar rumah. Udara terasa sejuk, jalanan masih sepi, dan pikiranku terasa jernih. Setelah itu aku sarapan dengan tenang sebelum memulai aktivitas.',
-    moodUri: 'https://picsum.photos/seed/happy/200',
-    heroUri: 'https://picsum.photos/seed/happyhero/800/450',
+    date: '2026-10-18',
+    preview: 'Jalan pagi 20 menit dan menikmati udara segar.',
+    body: 'Hari ini aku bangun lebih pagi dan berjalan kaki selama 20 menit. Udara terasa sejuk, jalanan masih sepi, dan pikiranku terasa jernih.',
+    moodImage: require('../../assets/moods/happy.png'),
   },
   {
     id: 2,
     title: 'Produktif di Kampus',
-    date: '2025-10-05',
-    preview: 'Menyelesaikan modul praktikum dan berdiskusi dengan tim. Banyak insight baru...',
-    body: 'Hari ini aku menyelesaikan modul praktikum dan berdiskusi dengan tim tentang pembagian tugas proyek. Ada banyak insight baru, terutama soal cara menyusun komponen agar bisa dipakai ulang. Kemajuan proyek terasa nyata.',
-    moodUri: 'https://picsum.photos/seed/focus/200',
-    heroUri: 'https://picsum.photos/seed/focushero/800/450',
+    date: '2026-10-17',
+    preview: 'Menyelesaikan modul praktikum dan berdiskusi dengan tim.',
+    body: 'Hari ini cukup produktif karena beberapa target perkuliahan selesai. Diskusi dengan tim membahas cara menyusun komponen agar bisa dipakai ulang.',
+    moodImage: require('../../assets/moods/focus.png'),
   },
   {
     id: 3,
     title: 'Senja di Taman',
-    date: '2025-10-04',
-    preview: 'Menikmati senja sambil membaca buku favorit. Warna langit sangat indah...',
-    body: 'Sore ini aku menikmati senja di taman sambil membaca buku favorit. Warna langit berubah dari jingga ke ungu dan suasananya sangat damai. Refleksi singkat: ternyata istirahat sejenak membuat pikiran lebih ringan.',
-    moodUri: 'https://picsum.photos/seed/calm/200',
-    heroUri: 'https://picsum.photos/seed/calmhero/800/450',
-  },
-  {
-    id: 4,
-    title: 'Belajar Flexbox',
-    date: '2025-10-03',
-    preview: 'Akhirnya paham cara kerja flexDirection, justifyContent, dan alignItems...',
-    body: 'Akhirnya aku paham cara kerja flexDirection, justifyContent, dan alignItems di React Native. Kuncinya adalah memahami sumbu utama dan sumbu silang. Setelah banyak mencoba, tata letak kartu diary jadi jauh lebih rapi.',
-    moodUri: 'https://picsum.photos/seed/learn/200',
-    heroUri: 'https://picsum.photos/seed/learnhero/800/450',
-  },
-  {
-    id: 5,
-    title: 'Akhir Pekan Santai',
-    date: '2025-10-02',
-    preview: 'Menghabiskan akhir pekan bersama keluarga, makan bersama dan bercerita...',
-    body: 'Akhir pekan ini aku menghabiskan waktu bersama keluarga. Kami makan bersama, bercerita tentang kegiatan masing-masing, lalu menonton film. Rasanya menyenangkan bisa sejenak lepas dari tugas kuliah.',
-    moodUri: 'https://picsum.photos/seed/weekend/200',
-    heroUri: 'https://picsum.photos/seed/weekendhero/800/450',
+    date: '2026-10-16',
+    preview: 'Membaca buku sambil menikmati suasana senja.',
+    body: 'Sore ini saya menikmati waktu di taman sambil membaca buku. Warna langit berubah dari jingga ke ungu dan suasananya sangat damai.',
+    moodImage: require('../../assets/moods/calm.png'),
   },
 ];
 
 export default function DiaryListScreen() {
-  // useWindowDimensions ikut berubah saat ukuran/orientasi layar berubah
+  // ---------- STATE UTAMA ----------
+  const [entries, setEntries] = useState(INITIAL_ENTRIES);
+  const [query, setQuery] = useState('');
+  const [likedIds, setLikedIds] = useState(new Set());
+  const [selected, setSelected] = useState(null);
+
+  // ---------- LAYOUT RESPONSIF (dari Pertemuan 3) ----------
   const { width } = useWindowDimensions();
   const twoCols = width >= BREAKPOINTS.tablet;
 
-  // Entri yang sedang dibuka di modal (null = modal tertutup)
-  const [selected, setSelected] = useState(null);
+  // ---------- DERIVED STATE ----------
+  // filtered dihitung dari entries & query; data asli tidak diubah.
+  const filtered = useMemo(() => {
+    if (!query.trim()) return entries;
 
-  // Key berubah saat jumlah kolom berubah -> FlatList dibuat ulang.
-  // Wajib, karena React Native tidak mengizinkan numColumns berubah on-the-fly.
-  const keyForCols = useMemo(() => (twoCols ? 'grid2' : 'list1'), [twoCols]);
+    const q = query.toLowerCase();
 
+    return entries.filter(
+      (entry) =>
+        entry.title.toLowerCase().includes(q) ||
+        entry.preview.toLowerCase().includes(q) ||
+        entry.date.toLowerCase().includes(q)
+    );
+  }, [entries, query]);
+
+  const likedCount = likedIds.size;
+
+  // ---------- EVENT HANDLER (dipanggil child lewat callback props) ----------
+  const toggleLike = (id) => {
+    // Jangan mutasi Set lama — buat Set baru agar React re-render
+    setLikedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const addEntry = (newEntry) => {
+    // Entri baru diletakkan paling atas (immutable update)
+    setEntries((prev) => [newEntry, ...prev]);
+  };
+
+  // ---------- RENDER ----------
   const renderItem = ({ item }) => (
     <View style={[styles.itemWrap, twoCols && styles.itemWrap2]}>
       <DiaryCard
         title={item.title}
         date={item.date}
         preview={item.preview}
-        moodUri={item.moodUri}
-        variant={twoCols ? 'grid' : 'list'}
+        moodImage={item.moodImage}
+        liked={likedIds.has(item.id)}
+        onToggleLike={() => toggleLike(item.id)}
         onPress={() => setSelected(item)}
+        variant={twoCols ? 'grid' : 'list'}
       />
     </View>
   );
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Buku Harian</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.header}>Buku Harian</Text>
+        <Text style={styles.stats}>
+          {filtered.length}/{entries.length} entri · ❤️ {likedCount}
+        </Text>
+      </View>
+
+      <SearchBar onChange={setQuery} />
 
       <FlatList
-        key={keyForCols}
-        data={DATA}
+        // FlatList dibuat ulang saat jumlah kolom berubah (aturan numColumns)
+        key={twoCols ? 'grid2' : 'list1'}
+        data={filtered}
         numColumns={twoCols ? 2 : 1}
-        keyExtractor={(it) => String(it.id)}
+        keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
+        extraData={likedIds}
         columnWrapperStyle={twoCols ? { gap: SPACE.m } : undefined}
-        contentContainerStyle={{
-          padding: SPACE.l,
-          gap: SPACE.m,
-          paddingTop: SPACE.m,
-        }}
-        ListEmptyComponent={<Text style={styles.empty}>Belum ada entri.</Text>}
+        contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
+        // Form ikut di-scroll bersama daftar agar layar kecil tetap lega
+        ListHeaderComponent={<EntryForm onSubmit={addEntry} />}
+        ListEmptyComponent={
+          <Text style={styles.empty}>
+            {query.trim() ? `Tidak ada entri untuk "${query}".` : 'Belum ada entri.'}
+          </Text>
+        }
       />
 
       <DiaryDetailModal
         visible={!!selected}
         entry={selected}
+        liked={selected ? likedIds.has(selected.id) : false}
         onClose={() => setSelected(null)}
       />
     </View>
@@ -114,15 +158,37 @@ export default function DiaryListScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.surface },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACE.l,
+    paddingTop: SPACE.l,
+  },
   header: {
     fontSize: TYPO.h1,
     fontWeight: '700',
-    paddingHorizontal: SPACE.l,
-    paddingTop: SPACE.l,
     color: COLORS.text,
   },
+  stats: {
+    fontSize: TYPO.caption,
+    color: COLORS.muted,
+    marginBottom: 4,
+  },
+  listContent: {
+    padding: SPACE.l,
+    gap: SPACE.m,
+    paddingTop: 0,
+  },
   itemWrap: { flex: 1 },
-  itemWrap2: { flex: 1 / 2 }, // tiap kartu memakai setengah lebar baris
-  empty: { textAlign: 'center', color: COLORS.muted, marginTop: 40 },
+  itemWrap2: { flex: 1 / 2 },
+  empty: {
+    textAlign: 'center',
+    color: COLORS.muted,
+    marginTop: 40,
+  },
 });

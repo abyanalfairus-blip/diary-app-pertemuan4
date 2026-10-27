@@ -1,11 +1,11 @@
-# Diary App: Praktikum Pertemuan 3
+# Diary App: Praktikum Pertemuan 4
 
-Desain UI dengan Flexbox & StyleSheet; Layout Responsif (React Native + Expo).
+Props dan State pada React Native (Expo). Lanjutan dari Praktikum Pertemuan 3.
 
 | | |
 |---|---|
 | **Nama** | Abyan |
-| **NIM** | [isi NIM] |
+| **NIM** | 2430511014 |
 | **Mata Kuliah** | Mobile Programming, Program Studi Teknik Informatika, UMMI |
 | **Repositori** | https://github.com/abyanalfairus-blip/diary-app |
 
@@ -18,52 +18,107 @@ npx expo start        # tambahkan -c jika perlu membersihkan cache
 
 Setelah server berjalan: tekan `a` (Android Emulator), `w` (web), atau scan QR dengan Expo Go.
 
-## Fitur yang Diselesaikan
+## Fitur Pertemuan 4
 
-- [x] **Design tokens** (`src/styles/tokens.js`): warna, spacing, radius, tipografi, breakpoint.
-- [x] **StyleSheet konsisten**: seluruh komponen memakai token, tanpa angka/warna yang tersebar.
-- [x] **DiaryCard reusable**: dibungkus `Pressable`, ada ripple Android, efek tekan, dan prop `variant` (`list` / `grid`).
-- [x] **FlatList responsif**: 1 kolom di ponsel, 2 kolom saat lebar layar >= 600 px.
-- [x] **DiaryDetailModal**: hero image (`aspectRatio: 16/9`), judul, tanggal, isi, dan tombol Tutup.
-- [x] **Aksesibilitas dasar**: `accessibilityLabel` dan `accessibilityRole`, kontras teks tinggi, target sentuh >= 48 dp.
-- [x] **5 entri diary** (3 dari modul + 2 entri baru: "Belajar Flexbox" dan "Akhir Pekan Santai").
-- [x] **Empty state** ("Belum ada entri.") dan tombol Back Android menutup modal.
+- [x] **DiaryCard** sebagai presentational component: menerima data dan callback lewat props, tanpa `useState`.
+- [x] **SearchBar**: local state `queryText` dan callback `onChange` ke parent.
+- [x] **EntryForm**: controlled form (judul, tanggal, ringkasan) dan callback `onSubmit`. Tombol Simpan nonaktif selama judul/ringkasan kosong, dan form dikosongkan setelah disimpan.
+- [x] **DiaryListScreen** sebagai container: mengelola `entries`, `query`, `likedIds`, dan `selected`.
+- [x] **Derived state**: `filtered` (hasil pencarian, `useMemo`) dan jumlah entri yang disukai.
+- [x] **Like** berubah tanpa reload, memakai `Set` baru setiap kali.
+- [x] **Modal detail** dibuka dan ditutup lewat state `selected`.
+- [x] **Gambar lokal** di `assets/moods/` (`happy.png`, `focus.png`, `calm.png`, `default.png`), tanpa koneksi internet.
+- [x] Layout responsif dari Pertemuan 3 tetap ada: 1 kolom di ponsel, 2 kolom saat lebar >= 600 px.
 
 ## Struktur Proyek
 
 ```
 diary-app/
 ├── App.js
+├── assets/
+│   └── moods/            happy.png, focus.png, calm.png, default.png
+├── screenshots/          bukti pengujian
 └── src/
     ├── components/
     │   ├── DiaryCard.js
-    │   └── DiaryDetailModal.js
+    │   ├── DiaryDetailModal.js
+    │   ├── SearchBar.js
+    │   └── EntryForm.js
     ├── screens/
     │   └── DiaryListScreen.js
     └── styles/
         └── tokens.js
 ```
 
-## Penjelasan Breakpoint 600 px
+## Penjelasan Props dan State
 
-`DiaryListScreen` membaca lebar layar dengan `useWindowDimensions()` dan membandingkannya dengan `BREAKPOINTS.tablet` (600):
+**Props** adalah data atau fungsi yang dikirim parent ke child. Child hanya membaca props, tidak mengubahnya.
+**State** adalah data milik komponen yang bisa berubah lewat setter dari `useState`. Setiap kali state berubah, React merender ulang tampilan.
 
-```js
-const { width } = useWindowDimensions();
-const twoCols = width >= BREAKPOINTS.tablet;
+Analogi: `DiaryListScreen` seperti **bagian administrasi kampus** yang memegang buku induk (state). `DiaryCard` seperti **papan pengumuman**: hanya menampilkan apa yang ditempel administrasi (props). Kalau mahasiswa ingin menandai sesuatu (like), ia tidak mencoret papan sendiri, melainkan **melapor ke administrasi** (callback `onToggleLike`). Administrasi memperbarui buku induk, lalu papan diperbarui.
+
+### Aliran data
+
+```
+DiaryListScreen (PARENT / CONTAINER)
+├── props data ─────> DiaryCard     title, date, preview, moodImage, liked
+├── callback  <────── DiaryCard     onToggleLike(), onPress()
+├── callback  <────── SearchBar     onChange(text)
+└── callback  <────── EntryForm     onSubmit(entry)
+
+Aksi pengguna → callback dipanggil → setState() di parent → state berubah → re-render → UI terbaru
 ```
 
-- Jika `width < 600`, `twoCols = false`: `FlatList` memakai `numColumns={1}` dan kartu tampil satu baris penuh (layout ponsel portrait).
-- Jika `width >= 600`, `twoCols = true`: `numColumns={2}`, tiap kartu memakai `flex: 1/2` sehingga dua kartu berdampingan (tablet atau ponsel landscape).
-- Hook ini ikut diperbarui saat ukuran atau orientasi layar berubah, jadi tampilan berpindah 1 ke 2 kolom secara otomatis.
-- `key={keyForCols}` ikut berganti (`list1` / `grid2`) agar `FlatList` dibuat ulang, karena `numColumns` tidak boleh berubah tanpa mengganti `key`.
+### Jenis state yang dipakai
 
-## Screenshot
+| State / Nilai | Jenis | Letak | Peran |
+|---|---|---|---|
+| `entries` | State utama (shared) | DiaryListScreen | Seluruh data diary |
+| `query` | State utama (shared) | DiaryListScreen | Kata kunci dari SearchBar |
+| `likedIds` | State utama (shared) | DiaryListScreen | `Set` berisi id entri yang disukai |
+| `selected` | State utama | DiaryListScreen | Entri yang sedang dibuka di modal |
+| `filtered` | Derived state | DiaryListScreen | Dihitung dari `entries` + `query` dengan `useMemo` |
+| `queryText` | Local state | SearchBar | Isi kolom pencarian |
+| `title`, `date`, `preview` | Local state | EntryForm | Isi input form (controlled) |
 
-**Tampilan 1 kolom (lebar < 600 px)**
+### Kenapa `Set` harus dibuat baru?
 
-[Tempel screenshot di sini]
+React membandingkan referensi. Jika `Set` lama diubah langsung, referensinya sama, sehingga React tidak mendeteksi perubahan. Karena itu selalu dibuat salinan baru:
 
-**Tampilan 2 kolom (lebar >= 600 px)**
+```js
+setLikedIds((prev) => {
+  const next = new Set(prev);
+  next.has(id) ? next.delete(id) : next.add(id);
+  return next;
+});
+```
 
-[Tempel screenshot di sini]
+Prinsip yang sama dipakai saat menambah entri: `setEntries((prev) => [newEntry, ...prev])`, bukan `entries.push(...)`.
+
+## Screenshot Pengujian
+
+| Sebelum (awal) | Pencarian "kampus" | Like 2 entri |
+|---|---|---|
+| ![](screenshots/01-awal.png) | ![](screenshots/02-search.png) | ![](screenshots/03-like.png) |
+
+| Modal detail | Form diisi | Sesudah: 2 entri baru |
+|---|---|---|
+| ![](screenshots/04-modal.png) | ![](screenshots/05-form-diisi.png) | ![](screenshots/06-entri-baru.png) |
+
+**Layar lebar (>= 600 px, 2 kolom)**
+
+![](screenshots/07-tablet-2-kolom.png)
+
+## Checklist Pengujian
+
+- [x] Project dapat dijalankan dengan `npx expo start`.
+- [x] DiaryCard menerima data melalui props.
+- [x] `liked` dan `onToggleLike` dikendalikan oleh parent.
+- [x] SearchBar memiliki local state dan mengirim perubahan melalui `onChange`.
+- [x] EntryForm menggunakan controlled inputs.
+- [x] EntryForm mengirim data baru melalui `onSubmit`.
+- [x] `entries` bertambah setelah form disimpan (diuji dengan 2 entri baru).
+- [x] `query` memfilter daftar tanpa mengubah data asli.
+- [x] `likedIds` berubah menggunakan `Set` baru.
+- [x] `selected` membuka dan menutup DiaryDetailModal.
+- [x] Tidak ada error import atau warning utama di terminal.
